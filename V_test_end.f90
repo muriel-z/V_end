@@ -122,16 +122,7 @@ write(*,*) 'Empezamo'
 
 do l= 1,N_iter
      
-    !write(*,*) real(l,np)/real(N_iter,np)*100._np
-    !$OMP PARALLEL DO PRIVATE(I,J,K)
-    do i = 1,nvx
-        do j = 1,nvy
-            do k = 1,nvz 
-                V(i,j,k) = (V0(i+1,j,k)+V0(i-1,j,k)+V0(i,j+1,k)+V0(i,j-1,k)+V0(i,j,k+1)+V0(i,j,k-1))/6._np
-                !if(abs(V(i,j,k)-V0(i,j,k))>1.e-5_dp) print *, "WARNING"
-            enddo
-        enddo
-    enddo
+    call stencil(V0, nvx, nvy, nvz, V)
 
     ! TODO: Residuo entre V y V0
     if(mod(l,2)==0) then
@@ -179,6 +170,27 @@ call salida('Vp.dat',r)
    
 
 contains
+
+subroutine stencil(V0, nvx, nvy, nvz, V)
+    implicit none
+
+    integer, intent(in) :: nvx, nvy, nvz
+    real(np), dimension(0:nvx+1, 0:nvy+1, 0:nvz+1), intent(in) :: V0
+    real(np), dimension(1:nvx, 1:nvy, 1:nvz), intent(out) :: V
+
+    integer :: i, j, k
+
+    !$OMP PARALLEL DO PRIVATE(I,J,K)
+    do i = 1,nvx
+        do j = 1,nvy
+            do k = 1,nvz
+                V(i,j,k) = (V0(i+1,j,k)+V0(i-1,j,k)+V0(i,j+1,k)+V0(i,j-1,k)+V0(i,j,k+1)+V0(i,j,k-1))/6._np
+                !if(abs(V(i,j,k)-V0(i,j,k))>1.e-5_dp) print *, "WARNING"
+            enddo
+        enddo
+    enddo
+end subroutine stencil
+
 
 subroutine salida(archivo,r)
 character(*),intent(in)  :: archivo
