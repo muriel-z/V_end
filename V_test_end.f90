@@ -33,7 +33,7 @@ boxmax(:)=[300._np,300._np,300._np]
 nvx = 300
 nvy = 300
 nvz = 300
-N_iter = 700
+N_iter = 2000
 
 h(1)=(boxmax(1)-boxmin(1))/(nvx-1)
 h(2)=(boxmax(2)-boxmin(2))/(nvy-1)
