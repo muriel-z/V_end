@@ -123,11 +123,11 @@ program V_test_end
 
    do l=1,N_iter
 
-      call stencil(V0,nvx,nvy,nvz,V)
+      call step(V0,nvx,nvy,nvz,V,res)
 
       ! TODO: Residuo entre V y V0
       if(mod(l,2)==0) then
-         res=sum((V0(1:nvx,1:nvy,1:nvz)-V(:,:,:))**2)
+         ! res=sum((V0(1:nvx,1:nvy,1:nvz)-V(:,:,:))**2)
          write(*,*) 'N_iter=',l,"Res",res
       endif
 
@@ -169,26 +169,29 @@ program V_test_end
 
 contains
 
-   subroutine stencil(V0,nvx,nvy,nvz,V)
+   subroutine step(V0,nvx,nvy,nvz,V,res)
       implicit none
 
       integer,intent(in) :: nvx,nvy,nvz
       real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(in) :: V0
       real(np),dimension(1:nvx,1:nvy,1:nvz),intent(out) :: V
+      real(np),intent(out) :: res
 
       integer :: i,j,k
 
-      !$OMP PARALLEL DO PRIVATE(I,J,K)
+      res = 0._np
+      !$omp parallel do private(i,j,k) reduction(+:res)
       do k=1,nvz
          do j=1,nvy
             do i=1,nvx
                V(i,j,k)=(V0(i+1,j,k)+V0(i-1,j,k)+V0(i,j+1,k)+V0(i,j-1,k)+V0(i,j,k+1)+V0(i,j,k-1))/6._np
+               res=res+((V0(i,j,k)-V(i,j,k))**2)
                !if(abs(V(i,j,k)-V0(i,j,k))>1.e-5_dp) print *, "WARNING"
             enddo
          enddo
       enddo
-      !$OMP END PARALLEL DO
-   endsubroutine stencil
+      !$omp end parallel do
+   endsubroutine step
 
    subroutine salida(archivo,r)
       character(*),intent(in)  :: archivo
