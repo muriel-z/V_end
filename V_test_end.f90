@@ -181,14 +181,15 @@ subroutine stencil(V0, nvx, nvy, nvz, V)
     integer :: i, j, k
 
     !$OMP PARALLEL DO PRIVATE(I,J,K)
-    do i = 1,nvx
+    do k = 1,nvz
         do j = 1,nvy
-            do k = 1,nvz
+            do i = 1,nvx
                 V(i,j,k) = (V0(i+1,j,k)+V0(i-1,j,k)+V0(i,j+1,k)+V0(i,j-1,k)+V0(i,j,k+1)+V0(i,j,k-1))/6._np
                 !if(abs(V(i,j,k)-V0(i,j,k))>1.e-5_dp) print *, "WARNING"
             enddo
         enddo
     enddo
+    !$OMP END PARALLEL DO
 end subroutine stencil
 
 
