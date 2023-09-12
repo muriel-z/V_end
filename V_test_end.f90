@@ -80,13 +80,13 @@ program V_test_end
    write(*,*) 'Ya leyó las posiciones finales'
 
    !Variables del potencial
-   allocate(V(nvx,nvy,nvz))
+   allocate(V(0:nvx+1,0:nvy+1,0:nvz+1))
    write(*,*) 'size V',size(V,dim=1)
    allocate(V0(0:nvx+1,0:nvy+1,0:nvz+1))
    write(*,*) 'size V0',size(V0,dim=3)
 
-   !V0(:,:,:) = 0._np
-   !V(:,:,:) = 0._np
+   V0(:,:,:) = 0._np
+   V(:,:,:) = 0._np
 
    !Condicion inicial - construyo el gradiente de voltaje en la dirección z
    Vtop=10._np
@@ -132,13 +132,13 @@ program V_test_end
       endif
 
       ! Avance
-      V0(1:nvx,1:nvy,1:nvz)=V(:,:,:)
+      V0(1:nvx,1:nvy,1:nvz)=V(1:nvx,1:nvy,1:nvz)
 
       ! PBC
-      V0(nvx+1,1:nvy,1:nvz)=V(1,:,:)
-      V0(0,1:nvy,1:nvz)=V(nvx,:,:)
-      V0(1:nvx,nvy+1,1:nvz)=V(:,1,:)
-      V0(1:nvx,0,1:nvz)=V(:,nvy,:)
+      V0(nvx+1,1:nvy,1:nvz)=V(1,1:nvy,1:nvz)
+      V0(0,1:nvy,1:nvz)=V(nvx,1:nvy,1:nvz)
+      V0(1:nvx,nvy+1,1:nvz)=V(1:nvx,1,1:nvz)
+      V0(1:nvx,0,1:nvz)=V(1:nvx,nvy,1:nvz)
 
       ! Metal es cero
       !$OMP PARALLEL DO PRIVATE(N,RI,RJ,RK)
@@ -174,7 +174,7 @@ contains
 
       integer,intent(in) :: nvx,nvy,nvz
       real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(in) :: V0
-      real(np),dimension(1:nvx,1:nvy,1:nvz),intent(out) :: V
+      real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(out) :: V
       real(np),intent(out) :: res
 
       integer :: i,j,k
