@@ -4,23 +4,25 @@ implicit none
 integer                                 ::nvx,nvy,nvz !numero de grilla
 integer                                 ::pnum,N_iter !numero de particulas, numero de iteraciones
 real(np),dimension(:,:,:),allocatable   ::V,V0        !voltaje nuevo y anterior
-real(np),dimension(:,:,:),allocatable   ::Vx,Vy,Vz,V0x,V0y,V0z !componentes
-real(np)                                ::dv,Vtop !Vtop es el valor del voltaje en la tapa
+!real(np),dimension(:,:,:),allocatable   ::Vx,Vy,Vz,V0x,V0y,V0z !componentes
+!real(np)                                ::dv
+real(np)                                ::Vtop !Vtop es el valor del voltaje en la tapa
 real(np),dimension(:),allocatable       ::m   !Voltaje asociado a cada particula,masa
 character,dimension(:),allocatable      ::sym         !indica si la particula es litio libre o congelado
 logical,dimension(:),allocatable        ::metal
-real(np)                                ::d1,d2,d3,dist2,div,res
+!real(np)                                ::d1,d2,d3,dist2,div,res
+real(np)                                ::div,res
 real(np)                                ::boxmin(3),boxmax(3),h(3),r3(3)
-integer                                 ::i,j,k,l,n
+integer                                 ::i,l,n
 real(np),dimension(:,:),allocatable     :: r       ! Posiciones
-real(np),dimension(:), allocatable      ::hist
-real(np)                                ::dx,x
+!real(np),dimension(:), allocatable      ::hist
+!real(np)                                ::dx,x
 integer                                 ::ri,rj,rk
-integer                                 ::ibin,nbin
-character(len=6)                        ::aux
-character(len=15)                       ::filename
+!integer                                 ::ibin,nbin
+!character(len=6)                        ::aux
+!character(len=15)                       ::filename
 integer                                 :: count_CG, count_Li
-character(len=2)                        ::Li,CG
+!character(len=2)                        ::Li,CG
 
 !Este programa tiene que agarrar una configuracion inicial y calcular el potencial
 !Del programa de python 
@@ -162,12 +164,9 @@ write(*,*) 'Ya terminó de calcular el potencial'
 
 call salida('Vp.dat',r)
 
-
-
-7 FORMAT (A3)
-10 FORMAT (3(3X,A15))
-11 FORMAT (3(2X,ES17.9)) 
-   
+! 7 FORMAT (A3)
+! 10 FORMAT (3(3X,A15))
+! 11 FORMAT (3(2X,ES17.9)) 
 
 contains
 
