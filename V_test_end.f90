@@ -6,7 +6,8 @@ program V_test_end
 
    integer                                 ::nvx,nvy,nvz !numero de grilla
    integer                                 ::pnum,N_iter !numero de particulas, numero de iteraciones
-   real(np),dimension(:,:,:),allocatable   ::V,V0        !voltaje nuevo y anterior
+   real(np),dimension(:,:,:,:),allocatable,target :: Vstorage
+   real(np),dimension(:,:,:),pointer       ::V,V0,Vtmp        !voltaje nuevo y anterior
    !real(np),dimension(:,:,:),allocatable   ::Vx,Vy,Vz,V0x,V0y,V0z !componentes
    !real(np)                                ::dv
    real(np)                                ::Vtop !Vtop es el valor del voltaje en la tapa
@@ -80,9 +81,12 @@ program V_test_end
    write(*,*) 'Ya leyó las posiciones finales'
 
    !Variables del potencial
-   allocate(V(0:nvx+1,0:nvy+1,0:nvz+1))
+   allocate(Vstorage(0:nvx+1,0:nvy+1,0:nvz+1,2))
+
+   V0(0:,0:,0:)=>Vstorage(:,:,:,1)
+   V(0:,0:,0:)=>Vstorage(:,:,:,2)
+
    write(*,*) 'size V',size(V,dim=1)
-   allocate(V0(0:nvx+1,0:nvy+1,0:nvz+1))
    write(*,*) 'size V0',size(V0,dim=3)
 
    !Condicion inicial - construyo el gradiente de voltaje en la dirección z
@@ -129,8 +133,10 @@ program V_test_end
          write(*,*) 'N_iter=',l,"Res",res
       endif
 
-      ! Avance
-      V0(:,:,:)=V(:,:,:)
+      ! Swap pointers
+      Vtmp=>V0
+      V0(0:,0:,0:)=>V(:,:,:)
+      V(0:,0:,0:)=>Vtmp(:,:,:)
 
       ! Metal es cero
       !$OMP PARALLEL DO PRIVATE(N,RI,RJ,RK)
