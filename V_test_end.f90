@@ -95,7 +95,7 @@ program V_test_end
       V0(:,:,i)=real(i,dp)/(nvz+1)*Vtop
    enddo
 
-   V(:,:,:) = V0(:,:,:) ! TODO: refine
+   V(:,:,:)=V0(:,:,:) ! TODO: refine
    V(1:nvx,1:nvy,1:nvz)=V0(2:nvx+1,2:nvy+1,2:nvz+1)
 
    !Condicion de metal - Se asigna voltaje nulo a la posciones de la malla donde haya estructura de dendritas
@@ -177,7 +177,7 @@ contains
 
       integer :: i,j,k
 
-      res = 0._np
+      res=0._np
       !$omp parallel do private(i,j,k) reduction(+:res)
       do k=1,nvz
          do j=1,nvy
@@ -191,7 +191,6 @@ contains
       !$omp end parallel do
    endsubroutine step
 
-
    subroutine step_pbc(V0,nvx,nvy,nvz,V,res)
       implicit none
 
@@ -202,7 +201,7 @@ contains
 
       integer :: i,j,k
 
-      res = 0._np
+      res=0._np
       !$omp parallel do private(i,j,k) reduction(+:res)
       do k=1,nvz
          do j=1,nvy
@@ -211,15 +210,14 @@ contains
                res=res+((V0(i,j,k)-V(i,j,k))**2)
                !if(abs(V(i,j,k)-V0(i,j,k))>1.e-5_dp) print *, "WARNING"
             enddo
-            V(nvx+1,j,k) = V(1,j,k)
-            V(0,j,k) = V(nvx,j,k)
+            V(nvx+1,j,k)=V(1,j,k)
+            V(0,j,k)=V(nvx,j,k)
          enddo
-         V(1:nvx,nvy+1,k) = V(1:nvx,1,k)
-         V(1:nvx,0,k) = V(1:nvx,nvy,k)
+         V(1:nvx,nvy+1,k)=V(1:nvx,1,k)
+         V(1:nvx,0,k)=V(1:nvx,nvy,k)
       enddo
       !$omp end parallel do
    endsubroutine step_pbc
-
 
    subroutine salida(archivo,r)
       character(*),intent(in)  :: archivo
