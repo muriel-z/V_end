@@ -130,13 +130,7 @@ program V_test_end
       endif
 
       ! Avance
-      V0(1:nvx,1:nvy,1:nvz)=V(1:nvx,1:nvy,1:nvz)
-
-      ! PBC
-      V0(nvx+1,1:nvy,1:nvz)=V(1,1:nvy,1:nvz)
-      V0(0,1:nvy,1:nvz)=V(nvx,1:nvy,1:nvz)
-      V0(1:nvx,nvy+1,1:nvz)=V(1:nvx,1,1:nvz)
-      V0(1:nvx,0,1:nvz)=V(1:nvx,nvy,1:nvz)
+      V0(:,:,:)=V(:,:,:)
 
       ! Metal es cero
       !$OMP PARALLEL DO PRIVATE(N,RI,RJ,RK)
