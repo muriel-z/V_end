@@ -121,7 +121,7 @@ program V_test_end
 
    do l=1,N_iter
 
-      call step(V0,nvx,nvy,nvz,V,res)
+      call step_pbc(V0,nvx,nvy,nvz,V,res)
 
       ! TODO: Residuo entre V y V0
       if(mod(l,2)==0) then
@@ -190,6 +190,36 @@ contains
       enddo
       !$omp end parallel do
    endsubroutine step
+
+
+   subroutine step_pbc(V0,nvx,nvy,nvz,V,res)
+      implicit none
+
+      integer,intent(in) :: nvx,nvy,nvz
+      real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(in) :: V0
+      real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(out) :: V
+      real(np),intent(out) :: res
+
+      integer :: i,j,k
+
+      res = 0._np
+      !$omp parallel do private(i,j,k) reduction(+:res)
+      do k=1,nvz
+         do j=1,nvy
+            do i=1,nvx
+               V(i,j,k)=(V0(i+1,j,k)+V0(i-1,j,k)+V0(i,j+1,k)+V0(i,j-1,k)+V0(i,j,k+1)+V0(i,j,k-1))/6._np
+               res=res+((V0(i,j,k)-V(i,j,k))**2)
+               !if(abs(V(i,j,k)-V0(i,j,k))>1.e-5_dp) print *, "WARNING"
+            enddo
+            V(nvx+1,j,k) = V(1,j,k)
+            V(0,j,k) = V(nvx,j,k)
+         enddo
+         V(1:nvx,nvy+1,k) = V(1:nvx,1,k)
+         V(1:nvx,0,k) = V(1:nvx,nvy,k)
+      enddo
+      !$omp end parallel do
+   endsubroutine step_pbc
+
 
    subroutine salida(archivo,r)
       character(*),intent(in)  :: archivo
