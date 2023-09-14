@@ -85,15 +85,13 @@ program V_test_end
    allocate(V0(0:nvx+1,0:nvy+1,0:nvz+1))
    write(*,*) 'size V0',size(V0,dim=3)
 
-   V0(:,:,:) = 0._np
-   V(:,:,:) = 0._np
-
    !Condicion inicial - construyo el gradiente de voltaje en la dirección z
    Vtop=10._np
    do i=0,nvz+1
       V0(:,:,i)=real(i,dp)/(nvz+1)*Vtop
    enddo
 
+   V(:,:,:) = V0(:,:,:) ! TODO: refine
    V(1:nvx,1:nvy,1:nvz)=V0(2:nvx+1,2:nvy+1,2:nvz+1)
 
    !Condicion de metal - Se asigna voltaje nulo a la posciones de la malla donde haya estructura de dendritas
