@@ -15,9 +15,9 @@ program V_test_end
    character,dimension(:),allocatable      ::sym         !indica si la particula es litio libre o congelado
    logical,dimension(:),allocatable        ::metal
    !real(np)                                ::d1,d2,d3,dist2,div,res
-   real(np)                                ::div,res
-   real(np)                                ::boxmin(3),boxmax(3),h(3),r3(3)
-   integer                                 ::i,l,n
+   real(np)                                ::res
+   real(np)                                ::boxmin(3),boxmax(3),h(3)
+   integer                                 ::i,l
    real(np),dimension(:,:),allocatable     :: r       ! Posiciones
    !real(np),dimension(:), allocatable      ::hist
    !real(np)                                ::dx,x
@@ -98,24 +98,7 @@ program V_test_end
    V(:,:,:)=V0(:,:,:) ! TODO: refine
    V(1:nvx,1:nvy,1:nvz)=V0(2:nvx+1,2:nvy+1,2:nvz+1)
 
-   !Condicion de metal - Se asigna voltaje nulo a la posciones de la malla donde haya estructura de dendritas
-   !$OMP PARALLEL DO PRIVATE(N,RI,RJ,RK)
-   do n=1,pnum ! sobre las particulas metalicas
-      !write(*,*) 'recorro las particulas internas n=', n
-      if(metal(n)) then
-         !write(*,*)'n=',n
-         ri=int((r(n,1)-boxmin(1))/h(1))+1
-         !write(*,*) 'ri=', ri
-         rj=int((r(n,2)-boxmin(2))/h(2))+1
-         !write(*,*) 'rj =', rj
-         rk=int((r(n,3)-boxmin(3))/h(3))+1
-         !write(*,*) 'rk=', rk
-
-         V0(ri,rj,rk)=0._np
-      endif
-   enddo
-
-   call salida('Vini.dat',r)
+   call salida('Vini.dat',r,V)
 
    !Doy el valor de la matriz del voltaje en t=0.Resuelta por Laplace
 
@@ -124,6 +107,7 @@ program V_test_end
    write(*,*) 'Empezamo'
 
    do l=1,N_iter
+      call dendritas(metal,r,V0)
 
       call step_pbc(V0,nvx,nvy,nvz,V,res)
 
@@ -138,7 +122,30 @@ program V_test_end
       V0(0:,0:,0:)=>V(:,:,:)
       V(0:,0:,0:)=>Vtmp(:,:,:)
 
-      ! Metal es cero
+   enddo
+
+   write(*,*) 'Ya terminó de calcular el potencial'
+
+   call salida('Vp.dat',r,V0)
+
+! 7 FORMAT (A3)
+! 10 FORMAT (3(3X,A15))
+! 11 FORMAT (3(2X,ES17.9))
+
+contains
+
+   subroutine dendritas(metal,r,V)
+      implicit none
+
+      logical,dimension(:),intent(in)        :: metal
+      real(np),intent(in)                    :: r(:,:)
+      real(np),dimension(:,:,:),intent(out)  :: V
+
+      integer :: n,pnum
+
+      pnum=size(r,1)
+
+      !Condicion de metal - Se asigna voltaje nulo a la posciones de la malla donde haya estructura de dendritas
       !$OMP PARALLEL DO PRIVATE(N,RI,RJ,RK)
       do n=1,pnum ! sobre las particulas metalicas
          !write(*,*) 'recorro las particulas internas n=', n
@@ -151,21 +158,10 @@ program V_test_end
             rk=int((r(n,3)-boxmin(3))/h(3))+1
             !write(*,*) 'rk=', rk
 
-            V0(ri,rj,rk)=0._np
+            V(ri,rj,rk)=0._np
          endif
       enddo
-
-   enddo
-
-   write(*,*) 'Ya terminó de calcular el potencial'
-
-   call salida('Vp.dat',r)
-
-! 7 FORMAT (A3)
-! 10 FORMAT (3(3X,A15))
-! 11 FORMAT (3(2X,ES17.9))
-
-contains
+   endsubroutine dendritas
 
    subroutine step(V0,nvx,nvy,nvz,V,res)
       implicit none
@@ -219,10 +215,17 @@ contains
       !$omp end parallel do
    endsubroutine step_pbc
 
-   subroutine salida(archivo,r)
+   subroutine salida(archivo,r,V)
       character(*),intent(in)  :: archivo
-      real(dp),intent(in)      :: r(:,:)
-      real(dp)       :: vpp(size(r,1))
+      real(np),intent(in)      :: r(:,:)
+      real(np),dimension(:,:,:),intent(in) :: V
+
+      real(np) :: Vpp(size(r,1))
+      real(np) :: r3(3)
+      real(np) :: div
+      integer :: l,pnum
+
+      pnum=size(r,1)
 
       open(16,file=archivo,status='replace')
       write(16,8) 'l','r(l,1)','r(l,2)','r(l,3)','Vp'
