@@ -6,7 +6,8 @@ program V_test_end
 
    integer                                 ::nvx,nvy,nvz !numero de grilla
    integer                                 ::pnum,N_iter !numero de particulas, numero de iteraciones
-   real(np),dimension(:,:,:),allocatable   ::V,V0        !voltaje nuevo y anterior
+   real(np),dimension(:,:,:,:),allocatable,target :: Vstorage
+   real(np),dimension(:,:,:),pointer       ::V,V0,Vtmp        !voltaje nuevo y anterior
    !real(np),dimension(:,:,:),allocatable   ::Vx,Vy,Vz,V0x,V0y,V0z !componentes
    !real(np)                                ::dv
    real(np)                                ::Vtop !Vtop es el valor del voltaje en la tapa
@@ -14,9 +15,9 @@ program V_test_end
    character,dimension(:),allocatable      ::sym         !indica si la particula es litio libre o congelado
    logical,dimension(:),allocatable        ::metal
    !real(np)                                ::d1,d2,d3,dist2,div,res
-   real(np)                                ::div,res
-   real(np)                                ::boxmin(3),boxmax(3),h(3),r3(3)
-   integer                                 ::i,l,n
+   real(np)                                ::res
+   real(np)                                ::boxmin(3),boxmax(3),h(3)
+   integer                                 ::i,l
    real(np),dimension(:,:),allocatable     :: r       ! Posiciones
    !real(np),dimension(:), allocatable      ::hist
    !real(np)                                ::dx,x
@@ -80,13 +81,13 @@ program V_test_end
    write(*,*) 'Ya leyó las posiciones finales'
 
    !Variables del potencial
-   allocate(V(nvx,nvy,nvz))
-   write(*,*) 'size V',size(V,dim=1)
-   allocate(V0(0:nvx+1,0:nvy+1,0:nvz+1))
-   write(*,*) 'size V0',size(V0,dim=3)
+   allocate(Vstorage(0:nvx+1,0:nvy+1,0:nvz+1,2))
 
-   !V0(:,:,:) = 0._np
-   !V(:,:,:) = 0._np
+   V0(0:,0:,0:)=>Vstorage(:,:,:,1)
+   V(0:,0:,0:)=>Vstorage(:,:,:,2)
+
+   write(*,*) 'size V',size(V,dim=1)
+   write(*,*) 'size V0',size(V0,dim=3)
 
    !Condicion inicial - construyo el gradiente de voltaje en la dirección z
    Vtop=10._np
@@ -94,26 +95,10 @@ program V_test_end
       V0(:,:,i)=real(i,dp)/(nvz+1)*Vtop
    enddo
 
+   V(:,:,:)=V0(:,:,:) ! TODO: refine
    V(1:nvx,1:nvy,1:nvz)=V0(2:nvx+1,2:nvy+1,2:nvz+1)
 
-   !Condicion de metal - Se asigna voltaje nulo a la posciones de la malla donde haya estructura de dendritas
-   !$OMP PARALLEL DO PRIVATE(N,RI,RJ,RK)
-   do n=1,pnum ! sobre las particulas metalicas
-      !write(*,*) 'recorro las particulas internas n=', n
-      if(metal(n)) then
-         !write(*,*)'n=',n
-         ri=int((r(n,1)-boxmin(1))/h(1))+1
-         !write(*,*) 'ri=', ri
-         rj=int((r(n,2)-boxmin(2))/h(2))+1
-         !write(*,*) 'rj =', rj
-         rk=int((r(n,3)-boxmin(3))/h(3))+1
-         !write(*,*) 'rk=', rk
-
-         V0(ri,rj,rk)=0._np
-      endif
-   enddo
-
-   call salida('Vini.dat',r)
+   call salida('Vini.dat',r,V)
 
    !Doy el valor de la matriz del voltaje en t=0.Resuelta por Laplace
 
@@ -122,8 +107,9 @@ program V_test_end
    write(*,*) 'Empezamo'
 
    do l=1,N_iter
+      call dendritas(metal,r,V0)
 
-      call step(V0,nvx,nvy,nvz,V,res)
+      call step_pbc(V0,nvx,nvy,nvz,V,res)
 
       ! TODO: Residuo entre V y V0
       if(mod(l,2)==0) then
@@ -131,16 +117,35 @@ program V_test_end
          write(*,*) 'N_iter=',l,"Res",res
       endif
 
-      ! Avance
-      V0(1:nvx,1:nvy,1:nvz)=V(:,:,:)
+      ! Swap pointers
+      Vtmp=>V0
+      V0(0:,0:,0:)=>V(:,:,:)
+      V(0:,0:,0:)=>Vtmp(:,:,:)
 
-      ! PBC
-      V0(nvx+1,1:nvy,1:nvz)=V(1,:,:)
-      V0(0,1:nvy,1:nvz)=V(nvx,:,:)
-      V0(1:nvx,nvy+1,1:nvz)=V(:,1,:)
-      V0(1:nvx,0,1:nvz)=V(:,nvy,:)
+   enddo
 
-      ! Metal es cero
+   write(*,*) 'Ya terminó de calcular el potencial'
+
+   call salida('Vp.dat',r,V0)
+
+! 7 FORMAT (A3)
+! 10 FORMAT (3(3X,A15))
+! 11 FORMAT (3(2X,ES17.9))
+
+contains
+
+   subroutine dendritas(metal,r,V)
+      implicit none
+
+      logical,dimension(:),intent(in)        :: metal
+      real(np),intent(in)                    :: r(:,:)
+      real(np),dimension(:,:,:),intent(out)  :: V
+
+      integer :: n,pnum
+
+      pnum=size(r,1)
+
+      !Condicion de metal - Se asigna voltaje nulo a la posciones de la malla donde haya estructura de dendritas
       !$OMP PARALLEL DO PRIVATE(N,RI,RJ,RK)
       do n=1,pnum ! sobre las particulas metalicas
          !write(*,*) 'recorro las particulas internas n=', n
@@ -153,33 +158,22 @@ program V_test_end
             rk=int((r(n,3)-boxmin(3))/h(3))+1
             !write(*,*) 'rk=', rk
 
-            V0(ri,rj,rk)=0._np
+            V(ri,rj,rk)=0._np
          endif
       enddo
-
-   enddo
-
-   write(*,*) 'Ya terminó de calcular el potencial'
-
-   call salida('Vp.dat',r)
-
-! 7 FORMAT (A3)
-! 10 FORMAT (3(3X,A15))
-! 11 FORMAT (3(2X,ES17.9))
-
-contains
+   endsubroutine dendritas
 
    subroutine step(V0,nvx,nvy,nvz,V,res)
       implicit none
 
       integer,intent(in) :: nvx,nvy,nvz
       real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(in) :: V0
-      real(np),dimension(1:nvx,1:nvy,1:nvz),intent(out) :: V
+      real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(out) :: V
       real(np),intent(out) :: res
 
       integer :: i,j,k
 
-      res = 0._np
+      res=0._np
       !$omp parallel do private(i,j,k) reduction(+:res)
       do k=1,nvz
          do j=1,nvy
@@ -193,10 +187,45 @@ contains
       !$omp end parallel do
    endsubroutine step
 
-   subroutine salida(archivo,r)
+   subroutine step_pbc(V0,nvx,nvy,nvz,V,res)
+      implicit none
+
+      integer,intent(in) :: nvx,nvy,nvz
+      real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(in) :: V0
+      real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(out) :: V
+      real(np),intent(out) :: res
+
+      integer :: i,j,k
+
+      res=0._np
+      !$omp parallel do private(i,j,k) reduction(+:res)
+      do k=1,nvz
+         do j=1,nvy
+            do i=1,nvx
+               V(i,j,k)=(V0(i+1,j,k)+V0(i-1,j,k)+V0(i,j+1,k)+V0(i,j-1,k)+V0(i,j,k+1)+V0(i,j,k-1))/6._np
+               res=res+((V0(i,j,k)-V(i,j,k))**2)
+               !if(abs(V(i,j,k)-V0(i,j,k))>1.e-5_dp) print *, "WARNING"
+            enddo
+            V(nvx+1,j,k)=V(1,j,k)
+            V(0,j,k)=V(nvx,j,k)
+         enddo
+         V(1:nvx,nvy+1,k)=V(1:nvx,1,k)
+         V(1:nvx,0,k)=V(1:nvx,nvy,k)
+      enddo
+      !$omp end parallel do
+   endsubroutine step_pbc
+
+   subroutine salida(archivo,r,V)
       character(*),intent(in)  :: archivo
-      real(dp),intent(in)      :: r(:,:)
-      real(dp)       :: vpp(size(r,1))
+      real(np),intent(in)      :: r(:,:)
+      real(np),dimension(:,:,:),intent(in) :: V
+
+      real(np) :: Vpp(size(r,1))
+      real(np) :: r3(3)
+      real(np) :: div
+      integer :: l,pnum
+
+      pnum=size(r,1)
 
       open(16,file=archivo,status='replace')
       write(16,8) 'l','r(l,1)','r(l,2)','r(l,3)','Vp'
