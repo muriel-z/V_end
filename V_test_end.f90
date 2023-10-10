@@ -36,9 +36,9 @@ program V_test_end
    boxmax(:)=[300._np,300._np,300._np]
 
    !Variables enteras
-   nvx=300
-   nvy=300
-   nvz=300
+   nvx=50
+   nvy=50
+   nvz=50
    N_iter=2000
 
    h(1)=(boxmax(1)-boxmin(1))/(nvx-1)
@@ -49,9 +49,11 @@ program V_test_end
    open(14,File='pos_final.xyz')
    read(14,*) pnum
    close(14)
-
    write(*,*) 'pnum = ',pnum
 
+   ! XXX: Prueba con 1 particula
+   pnum=1
+   
    allocate(r(pnum,3))
    allocate(sym(pnum))
    allocate(metal(pnum))
@@ -59,20 +61,28 @@ program V_test_end
    count_Li=0
    count_CG=0
 
-   open(14,File='pos_final.xyz')
-   read(14,*)
-   read(14,*)
-   do i=1,pnum
-      read(14,*) sym(i),r(i,:),m(i)
-      if(sym(i)=='L') then
-         count_Li=count_Li+1
-         metal(i)=.false.
-      elseif(sym(i)=='C') then
-         count_CG=count_CG+1
-         metal(i)=.true.
-      endif
-   enddo
-   close(14)
+   ! XXX: Prueba con 1 particula
+   ! open(14,File='pos_final.xyz')
+   ! read(14,*)
+   ! read(14,*)
+   ! do i=1,pnum
+   !    read(14,*) sym(i),r(i,:),m(i)
+   !    if(sym(i)=='L') then
+   !       count_Li=count_Li+1
+   !       metal(i)=.false.
+   !    elseif(sym(i)=='C') then
+   !       count_CG=count_CG+1
+   !       metal(i)=.true.
+   !    endif
+   ! enddo
+   ! close(14)
+
+   ! XXX: Prueba con 1 particula
+   sym(1)='C'
+   count_CG=count_CG+1
+   metal(1)=.true.
+   r(1,:)=[150._dp,150._dp,150._dp]
+
 
    write(*,*) 'count_Li = ',count_Li
 
@@ -92,20 +102,21 @@ program V_test_end
    !Condicion inicial - construyo el gradiente de voltaje en la dirección z
    Vtop=10._np
    do i=0,nvz+1
-      V0(:,:,i)=real(i,dp)/(nvz+1)*Vtop
+      V0(0:,0:,i)=real(i,dp)/(nvz+1)*Vtop
    enddo
 
-   V(:,:,:)=V0(:,:,:) ! TODO: refine
-   V(1:nvx,1:nvy,1:nvz)=V0(2:nvx+1,2:nvy+1,2:nvz+1)
+   V(0:,0:,0:)=V0(0:,0:,0:) ! TODO: refine
+   ! V(1:nvx,1:nvy,1:nvz)=V0(2:nvx+1,2:nvy+1,2:nvz+1)
 
-   call salida('Vini.dat',r,V)
+   call salida('Vini.dat',r,V,V0)
 
    !Doy el valor de la matriz del voltaje en t=0.Resuelta por Laplace
 
    !Itero para encontrar la solucion suave
 
-   write(*,*) 'Empezamo'
-
+   res=sum((V0(0:,0:,0:)-V(0:,0:,0:))**2)
+   write(*,*) 'Initial residue: ',res
+   
    do l=1,N_iter
       call dendritas(metal,r,V0)
 
@@ -121,12 +132,12 @@ program V_test_end
       Vtmp=>V0
       V0(0:,0:,0:)=>V(:,:,:)
       V(0:,0:,0:)=>Vtmp(:,:,:)
-
    enddo
 
    write(*,*) 'Ya terminó de calcular el potencial'
 
-   call salida('Vp.dat',r,V0)
+   print *, "RESS1SS",(V0(24,24,24)-V(24,24,24))**2
+   call salida('Vp.dat',r,V,V0)
 
 ! 7 FORMAT (A3)
 ! 10 FORMAT (3(3X,A15))
@@ -198,11 +209,16 @@ contains
       integer :: i,j,k
 
       res=0._np
+      open(123,file='res',status='replace')
       !$omp parallel do private(i,j,k) reduction(+:res)
       do k=1,nvz
          do j=1,nvy
             do i=1,nvx
                V(i,j,k)=(V0(i+1,j,k)+V0(i-1,j,k)+V0(i,j+1,k)+V0(i,j-1,k)+V0(i,j,k+1)+V0(i,j,k-1))/6._np
+               if(i==24.and.j==24.and.k==24) then
+                 write(123,*) i,j,k,(V0(i,j,k)-V(i,j,k))**2
+                 cycle
+               endif 
                res=res+((V0(i,j,k)-V(i,j,k))**2)
                !if(abs(V(i,j,k)-V0(i,j,k))>1.e-5_dp) print *, "WARNING"
             enddo
@@ -211,19 +227,56 @@ contains
          enddo
          V(1:nvx,nvy+1,k)=V(1:nvx,1,k)
          V(1:nvx,0,k)=V(1:nvx,nvy,k)
+
+         ! Cruzo aristas
+         V(0,0,k)=V(nvx,nvy,k)
+         V(nvx+1,nvy+1,k)=V(1,1,k)
+
+         ! Cruzo aristas
+         V(0,nvy+1,k)=V(nvx,1,k)
+         V(nvx+1,0,k)=V(1,nvy,k)
+         
       enddo
       !$omp end parallel do
+      close(123)
    endsubroutine step_pbc
+               
+   subroutine salida_V(archivo,V)
+      character(*),intent(in)  :: archivo
+      real(np),dimension(:,:,:),intent(in) :: V
+      integer :: i,j,k
 
-   subroutine salida(archivo,r,V)
+      open(216,file=archivo,status='replace')
+      print *, 'entro'
+      do k=1,nvz
+         do j=1,nvy
+            do i=1,nvx
+               write(216,'(3(i0,x),e15.7)') i,j,k,V(i,j,k)
+            enddo
+            write(216,*) 
+         enddo
+         write(216,*) 
+         write(216,*) 
+      enddo 
+      print *, 'salio'
+      close(216)
+
+   endsubroutine
+    
+   subroutine salida(archivo,r,V,V0)
       character(*),intent(in)  :: archivo
       real(np),intent(in)      :: r(:,:)
       real(np),dimension(:,:,:),intent(in) :: V
+      real(np),dimension(:,:,:),intent(in) :: V0
 
       real(np) :: Vpp(size(r,1))
       real(np) :: r3(3)
       real(np) :: div
       integer :: l,pnum
+
+   print *, "RESS2SS",(V0(25,25,25)-V(25,25,25))**2
+      call salida_V('V.dat',V)
+      call salida_V('V0.dat',V0)
 
       pnum=size(r,1)
 
