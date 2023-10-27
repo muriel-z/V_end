@@ -15,7 +15,7 @@ program V_test_end
    character,dimension(:),allocatable      ::sym         !indica si la particula es litio libre o congelado
    logical,dimension(:),allocatable        ::metal
    !real(np)                                ::d1,d2,d3,dist2,div,res
-   real(np)                                ::res
+   real(np)                                ::res,res1,res2,res_ini
    real(np)                                ::boxmin(3),boxmax(3),h(3)
    integer                                 ::i,l
    real(np),dimension(:,:),allocatable     :: r       ! Posiciones
@@ -39,7 +39,7 @@ program V_test_end
    nvx=50
    nvy=50
    nvz=50
-   N_iter=2000
+   N_iter=30000
 
    h(1)=(boxmax(1)-boxmin(1))/(nvx-1)
    h(2)=(boxmax(2)-boxmin(2))/(nvy-1)
@@ -58,7 +58,7 @@ program V_test_end
    count_Li=0
    count_CG=0
 
-
+   !Lee el archivo de posiciones finales y separa el tipo de particula L (Li+) y C (Li congelado)
    open(14,File='pos_final.xyz')
    read(14,*)
    read(14,*)
@@ -105,19 +105,27 @@ program V_test_end
 
    !Itero para encontrar la solucion suave
 
-   res=sum((V0(0:,0:,0:)-V(0:,0:,0:))**2)
-   write(*,*) 'Initial residue: ',res
-
+   !Residuo inicial
+   res_ini=sum((V0(0:,0:,0:)-V(0:,0:,0:))**2)
+   write(*,*) 'Initial residue: ',res_ini
+res1 = 0._np
+   !Iteracion de la solucion
    do l=1,N_iter
-      call dendritas(metal,r,V0)
+      res1 = res2
+      call dendritas(metal,r,V0,pnum)
 
       call step_pbc(V0,nvx,nvy,nvz,V,res)
+      !if(mod(l,2)==0) then
+      !   ! res=sum((V0(1:nvx,1:nvy,1:nvz)-V(:,:,:))**2)
+      !   write(*,*) 'N_iter=',l,"Res",res
+      !endif
 
-      ! TODO: Residuo entre V y V0
-      if(mod(l,2)==0) then
-         ! res=sum((V0(1:nvx,1:nvy,1:nvz)-V(:,:,:))**2)
-         write(*,*) 'N_iter=',l,"Res",res
+      res2 = res
+      if (abs(res2-res1).le.real(1e-5,np)) then
+         write(*,*) 'Convergioooo con N_iter=',l,'res=',res
+         stop
       endif
+      ! TODO: Residuo entre V y V0
 
       ! Swap pointers
       Vtmp=>V0
@@ -127,28 +135,29 @@ program V_test_end
 
    write(*,*) 'Ya terminó de calcular el potencial'
 
-   print *, "RESS1SS",(V0(24,24,24)-V(24,24,24))**2
    call salida('Vp.dat',r,V,V0)
 
 ! 7 FORMAT (A3)
 ! 10 FORMAT (3(3X,A15))
 ! 11 FORMAT (3(2X,ES17.9))
 
+!************************************************************
 contains
-
-   subroutine dendritas(metal,r,V)
+   !---------------------------------------------------------
+   subroutine dendritas(metal,r,V,pnumm)
       implicit none
 
       logical,dimension(:),intent(in)        :: metal
       real(np),intent(in)                    :: r(:,:)
+      integer, intent(in)                    :: pnumm
       real(np),dimension(:,:,:),intent(out)  :: V
 
-      integer :: n,pnum
+      integer :: n
 
 
       !Condicion de metal - Se asigna voltaje nulo a la posciones de la malla donde haya estructura de dendritas
       !$OMP PARALLEL DO PRIVATE(N,RI,RJ,RK)
-      do n=1,pnum ! sobre las particulas metalicas
+      do n=1,pnumm ! sobre las particulas metalicas
          !write(*,*) 'recorro las particulas internas n=', n
          if(metal(n)) then
             !write(*,*)'n=',n
@@ -163,6 +172,8 @@ contains
          endif
       enddo
    endsubroutine dendritas
+
+   !---------------------------------------------------------
 
    subroutine step(V0,nvx,nvy,nvz,V,res)
       implicit none
@@ -181,12 +192,18 @@ contains
             do i=1,nvx
                V(i,j,k)=(V0(i+1,j,k)+V0(i-1,j,k)+V0(i,j+1,k)+V0(i,j-1,k)+V0(i,j,k+1)+V0(i,j,k-1))/6._np
                res=res+((V0(i,j,k)-V(i,j,k))**2)
+               if(((V0(i,j,k)-V(i,j,k))**2)>=9.8070400018248165_np) then
+                  cycle
+                  write(123,*) i,j,k,(V0(i,j,k)-V(i,j,k))**2
+               endif
                !if(abs(V(i,j,k)-V0(i,j,k))>1.e-5_dp) print *, "WARNING"
             enddo
          enddo
       enddo
       !$omp end parallel do
    endsubroutine step
+
+   !---------------------------------------------------------
 
    subroutine step_pbc(V0,nvx,nvy,nvz,V,res)
       implicit none
@@ -199,19 +216,24 @@ contains
       integer :: i,j,k
 
       res=0._np
-      open(123,file='res',status='replace')
+      ! open(123,file='res_100.dat',status='replace')
+      !open(124,file='res_sum_100.dat',status='replace')
+      !open(125,file='res_sum_malla_100.dat',status='replace')
       !$omp parallel do private(i,j,k) reduction(+:res)
       do k=1,nvz
          do j=1,nvy
             do i=1,nvx
                V(i,j,k)=(V0(i+1,j,k)+V0(i-1,j,k)+V0(i,j+1,k)+V0(i,j-1,k)+V0(i,j,k+1)+V0(i,j,k-1))/6._np
                !Esto esta mal pero es masomenos lo que tengo que hcaer para que no me haga este calculo
-               if((V0(i,j,k)-V(i,j,k))**2.ge.9.8070400018248165_np) then
-                 write(123,*) i,j,k,(V0(i,j,k)-V(i,j,k))**2
-                 cycle
+               !Write(*,*)'Res antes del if', ((V0(i,j,k)-V(i,j,k))**2)
+               if(((V0(i,j,k)-V(i,j,k))**2)>=9.8070400018248165_np) then
+                  !Write(*,*)'Entro al if'
+                  cycle
                endif
                res=res+((V0(i,j,k)-V(i,j,k))**2)
                !if(abs(V(i,j,k)-V0(i,j,k))>1.e-5_dp) print *, "WARNING"
+               !write(123,*) i,j,k,(V0(i,j,k)-V(i,j,k))**2
+               !write(124,*) i,j,k,res
             enddo
             V(nvx+1,j,k)=V(1,j,k)
             V(0,j,k)=V(nvx,j,k)
@@ -226,11 +248,16 @@ contains
          ! Cruzo aristas
          V(0,nvy+1,k)=V(nvx,1,k)
          V(nvx+1,0,k)=V(1,nvy,k)
+         !write(125,*) i,j,k,res
 
       enddo
       !$omp end parallel do
-      close(123)
+      !close(123)
+      !close(124)
+      !close(125)
    endsubroutine step_pbc
+
+   !---------------------------------------------------------
 
    subroutine salida_V(archivo,V)
       character(*),intent(in)  :: archivo
@@ -238,7 +265,7 @@ contains
       integer :: i,j,k
 
       open(216,file=archivo,status='replace')
-      print *, 'entro'
+      !print *, 'entro'
       do k=1,nvz
          do j=1,nvy
             do i=1,nvx
@@ -249,10 +276,12 @@ contains
          write(216,*)
          write(216,*)
       enddo
-      print *, 'salio'
+      !print *, 'salio'
       close(216)
 
    endsubroutine
+
+   !---------------------------------------------------------
 
    subroutine salida(archivo,r,V,V0)
       character(*),intent(in)  :: archivo
@@ -265,7 +294,6 @@ contains
       real(np) :: div
       integer :: l,pnum
 
-   print *, "RESS2SS",(V0(25,25,25)-V(25,25,25))**2
       call salida_V('V.dat',V)
       call salida_V('V0.dat',V0)
 
@@ -292,6 +320,8 @@ contains
 9     FORMAT(5(2X,ES17.9))
 
    endsubroutine
+
+   !---------------------------------------------------------
 
    function trilinear_interpolation(r,f,boxmin,h) result(interp_val)
       real(np),intent(in) :: r(3),f(:,:,:)
@@ -342,5 +372,7 @@ contains
                   +dx*y*z*f(i,j1,k1)+x*y*z*f(i1,j1,k1)
 
    endfunction trilinear_interpolation
+
+   !---------------------------------------------------------
 
 endprogram V_test_end
