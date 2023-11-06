@@ -30,14 +30,24 @@ program V_test_end
 
    !Este programa tiene que agarrar una configuracion inicial y calcular el potencial
    !Del programa de python
+<<<<<<< HEAD
+=======
+
+>>>>>>> main
    !Dimensiones de la caja (final distinta a la inicial)
    boxmin(:)=[0._np,0._np,0._np]
    boxmax(:)=[300._np,300._np,300._np]
 
    !Variables enteras
+<<<<<<< HEAD
    nvx=300
    nvy=300
    nvz=300
+=======
+   nvx=50
+   nvy=50
+   nvz=50
+>>>>>>> main
    N_iter=30000
 
    h(1)=(boxmax(1)-boxmin(1))/(nvx-1)
@@ -122,7 +132,11 @@ res1 = 0._np
       res2 = res
       if (abs(res2-res1).le.real(1e-5,np)) then
          write(*,*) 'Convergioooo con N_iter=',l,'res=',res
+<<<<<<< HEAD
          exit
+=======
+         stop
+>>>>>>> main
       endif
       ! TODO: Residuo entre V y V0
 
@@ -373,4 +387,8 @@ contains
    endfunction trilinear_interpolation
 
    !---------------------------------------------------------
+<<<<<<< HEAD
+=======
+
+>>>>>>> main
 endprogram V_test_end
