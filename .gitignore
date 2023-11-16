@@ -1,14 +1,10 @@
 # Prerequisites
 *.d
 *.dat
-<<<<<<< HEAD
-*.png
-=======
 
 #Images
 *.png
 *.pdf
->>>>>>> main
 
 # Compiled Object files
 *.slo

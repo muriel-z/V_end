@@ -11,84 +11,37 @@ program V_test_end
    !real(np),dimension(:,:,:),allocatable   ::Vx,Vy,Vz,V0x,V0y,V0z !componentes
    !real(np)                                ::dv
    real(np)                                ::Vtop !Vtop es el valor del voltaje en la tapa
-   real(np),dimension(:),allocatable       ::m   !Voltaje asociado a cada particula,masa
-   character,dimension(:),allocatable      ::sym         !indica si la particula es litio libre o congelado
-   logical,dimension(:),allocatable        ::metal
+   logical,allocatable                     ::metal(:)
+   logical,allocatable                     ::mascara(:,:,:)
+    integer,allocatable                    :: ceros(:,:)
    !real(np)                                ::d1,d2,d3,dist2,div,res
-   real(np)                                ::res,res1,res2,res_ini
+   real(np)                                ::res,mres,res_ini
    real(np)                                ::boxmin(3),boxmax(3),h(3)
-   integer                                 ::i,l
    real(np),dimension(:,:),allocatable     :: r       ! Posiciones
+   integer                                 ::i,l,nceros
    !real(np),dimension(:), allocatable      ::hist
    !real(np)                                ::dx,x
-   integer                                 ::ri,rj,rk
    !integer                                 ::ibin,nbin
    !character(len=6)                        ::aux
    !character(len=15)                       ::filename
-   integer                                 :: count_CG,count_Li
    !character(len=2)                        ::Li,CG
 
    !Este programa tiene que agarrar una configuracion inicial y calcular el potencial
    !Del programa de python
-<<<<<<< HEAD
-=======
-
->>>>>>> main
    !Dimensiones de la caja (final distinta a la inicial)
    boxmin(:)=[0._np,0._np,0._np]
    boxmax(:)=[300._np,300._np,300._np]
 
    !Variables enteras
-<<<<<<< HEAD
-   nvx=300
-   nvy=300
-   nvz=300
-=======
-   nvx=50
-   nvy=50
-   nvz=50
->>>>>>> main
-   N_iter=30000
+   nvx=100
+   nvy=100
+   nvz=100
+
+   N_iter=3000
 
    h(1)=(boxmax(1)-boxmin(1))/(nvx-1)
    h(2)=(boxmax(2)-boxmin(2))/(nvy-1)
    h(3)=(boxmax(3)-boxmin(3))/(nvz-1)
-
-   !Leo el archivo de posición final a partir del cual vamos a calcular el potencial
-   open(14,File='pos_final.xyz')
-   read(14,*) pnum
-   close(14)
-   write(*,*) 'pnum = ',pnum
-
-   allocate(r(pnum,3))
-   allocate(sym(pnum))
-   allocate(metal(pnum))
-   allocate(m(pnum))
-   count_Li=0
-   count_CG=0
-
-   !Lee el archivo de posiciones finales y separa el tipo de particula L (Li+) y C (Li congelado)
-   open(14,File='pos_final.xyz')
-   read(14,*)
-   read(14,*)
-   do i=1,pnum
-        read(14,*) sym(i),r(i,:),m(i)
-        if(sym(i)=='L') then
-            count_Li=count_Li+1
-            metal(i)=.false.
-        elseif(sym(i)=='C') then
-        count_CG=count_CG+1
-        metal(i)=.true.
-        endif
-   enddo
-   close(14)
-
-
-   write(*,*) 'count_Li = ',count_Li
-
-   write(*,*) 'count_CG = ',count_CG
-
-   write(*,*) 'Ya leyó las posiciones finales'
 
    !Variables del potencial
    allocate(Vstorage(0:nvx+1,0:nvy+1,0:nvz+1,2))
@@ -98,6 +51,13 @@ program V_test_end
 
    write(*,*) 'size V',size(V,dim=1)
    write(*,*) 'size V0',size(V0,dim=3)
+
+   ! Matriz booleana
+   allocate(mascara(0:nvx+1,0:nvy+1,0:nvz+1))
+   
+   call dendritas(nvx,nvy,nvz,r,metal,V0,nceros,ceros,mascara)
+   
+
 
    !Condicion inicial - construyo el gradiente de voltaje en la dirección z
    Vtop=10._np
@@ -117,36 +77,29 @@ program V_test_end
    !Residuo inicial
    res_ini=sum((V0(0:,0:,0:)-V(0:,0:,0:))**2)
    write(*,*) 'Initial residue: ',res_ini
-res1 = 0._np
+  
+
+   !*********************************************************
+   
    !Iteracion de la solucion
    do l=1,N_iter
-      res1 = res2
-      call dendritas(metal,r,V0,pnum)
+      ! Set ceros
+      do i=1,nceros
+         V0(ceros(i,1),ceros(i,2),ceros(i,3))=0._np
+      enddo
 
-      call step_pbc(V0,nvx,nvy,nvz,V,res)
-      !if(mod(l,2)==0) then
-      !   ! res=sum((V0(1:nvx,1:nvy,1:nvz)-V(:,:,:))**2)
-      !   write(*,*) 'N_iter=',l,"Res",res
-      !endif
-
-      res2 = res
-      if (abs(res2-res1).le.real(1e-5,np)) then
-         write(*,*) 'Convergioooo con N_iter=',l,'res=',res
-<<<<<<< HEAD
+      call step_pbc(V0,nvx,nvy,nvz,V,res,mres,mascara)
+      res = res/(nvx*nvy*nvz)
+      if (res.le.1E-5) then
+         write(*,*)'Convergió con N_iter=',l,'res = ',res
          exit
-=======
-         stop
->>>>>>> main
       endif
-      ! TODO: Residuo entre V y V0
 
       ! Swap pointers
       Vtmp=>V0
       V0(0:,0:,0:)=>V(:,:,:)
       V(0:,0:,0:)=>Vtmp(:,:,:)
    enddo
-
-   write(*,*) 'Ya terminó de calcular el potencial'
 
    call salida('Vp.dat',r,V,V0)
 
@@ -157,117 +110,171 @@ res1 = 0._np
 !************************************************************
 contains
    !---------------------------------------------------------
-   subroutine dendritas(metal,r,V,pnumm)
+   subroutine dendritas(nvx,nvy,nvz,r,metal,V,nceros,ceros,mask)
       implicit none
 
-      logical,dimension(:),intent(in)        :: metal
-      real(np),intent(in)                    :: r(:,:)
-      integer, intent(in)                    :: pnumm
-      real(np),dimension(:,:,:),intent(out)  :: V
+      logical,allocatable,dimension(:),intent(out)        :: metal
+      integer,allocatable,intent(out)        :: ceros(:,:)
+      integer ,intent(in)                    :: nvx,nvy,nvz
+      logical,allocatable,intent(out)        :: mask(:,:,:)
+      real(np),dimension(:),allocatable       ::m   !Voltaje asociado a cada particula,masa
+      character,dimension(:),allocatable      ::sym         !indica si la particula es litio libre o congelado
+      real(np)                               :: ip(3),ia,ia2,d2
+      real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(inout) :: V
+      real(np),parameter                     :: a=3.2_np
+      integer                                 ::ri,rj,rk
+      integer                                :: n,pnum,iia
+      integer                                :: count_CG,count_Li,nceros
+      integer                                :: i,j,k
+      real(np),dimension(:,:),allocatable,intent(out)     :: r       ! Posiciones
 
-      integer :: n
+      ! Valores inicales
+      allocate(mask(0:nvx+1,0:nvy+1,0:nvz+1))
+      mask(:,:,:)=.false.
+      nceros=0
 
+      !Leo el archivo de posición final a partir del cual vamos a calcular el potencial
+      open(14,File='pos_final.xyz')
+      read(14,*) pnum
+      close(14)
+      write(*,*) 'pnum = ',pnum
 
-      !Condicion de metal - Se asigna voltaje nulo a la posciones de la malla donde haya estructura de dendritas
-      !$OMP PARALLEL DO PRIVATE(N,RI,RJ,RK)
-      do n=1,pnumm ! sobre las particulas metalicas
-         !write(*,*) 'recorro las particulas internas n=', n
-         if(metal(n)) then
-            !write(*,*)'n=',n
-            ri=int((r(n,1)-boxmin(1))/h(1))+1
-            !write(*,*) 'ri=', ri
-            rj=int((r(n,2)-boxmin(2))/h(2))+1
-            !write(*,*) 'rj =', rj
-            rk=int((r(n,3)-boxmin(3))/h(3))+1
-            !write(*,*) 'rk=', rk
+      allocate(r(pnum,3))
+      allocate(sym(pnum))
+      allocate(metal(pnum))
+      allocate(m(pnum))
+      count_Li=0
+      count_CG=0
+      !TODO Mejorar esto
+      allocate(ceros(8*pnum,3))
 
-            V(ri,rj,rk)=0._np
+      !Lee el archivo de posiciones finales y separa el tipo de particula L (Li+) y C (Li congelado)
+      open(14,File='pos_final.xyz')
+      read(14,*)
+      read(14,*)
+      do i=1,pnum
+         read(14,*) sym(i),r(i,:),m(i)
+         if(sym(i)=='L') then
+               count_Li=count_Li+1
+               metal(i)=.false.
+         elseif(sym(i)=='C') then
+         count_CG=count_CG+1
+         metal(i)=.true.
          endif
       enddo
+      close(14)
+
+
+      write(*,*) 'count_Li = ',count_Li
+
+      write(*,*) 'count_CG = ',count_CG
+
+      write(*,*) 'Ya leyó las posiciones finales'
+
+      
+      !Condicion de metal - Se asigna voltaje nulo a la posciones de la malla donde haya estructura de dendritas
+      !!$OMP PARALLEL DO PRIVATE(N,RI,RJ,RK)
+      pnum = size(r,1)
+      do n=1,pnum ! sobre las particulas metalicas
+         !write(*,*) 'recorro las particulas internas n=', n
+         if(metal(n)) then
+            !Nodo inferior mas cercano
+            ip(:)=(r(n,:)-boxmin(:))/h(:)+1
+
+            !El radio de corte en 
+            !XXX: Esto asume que h(1)=h(2)=h(3)
+            ia=a/h(1)
+            if(2*ia<1._np) then
+               print *, "WARNING: mejora la resolución de la malla"
+            endif
+
+            iia=int(ia)
+            ia2=ia*ia
+ 
+            !Nodo inferior mas cercano
+            ri=int(ip(1))
+            rj=int(ip(2))
+            rk=int(ip(3))
+                  
+            do i= ri-iia, ri+iia+1
+              do j= rj-iia, rj+iia+1
+                do k= rk-iia, rk+iia+1
+
+                  d2=(ip(1)-i)**2+(ip(2)-j)**2+(ip(3)-k)**2
+                  if(d2>ia2) cycle
+
+                  nceros=nceros+1
+                  ceros(nceros,1)=i
+                  ceros(nceros,2)=j
+                  ceros(nceros,3)=k
+
+                  mask(i,j,k)=.true.
+
+                  V(i,j,k)=0._np
+                enddo
+               enddo
+            enddo
+
+         endif
+      enddo
+      
+      print *, "We have this polos", nceros
+
    endsubroutine dendritas
 
    !---------------------------------------------------------
 
-   subroutine step(V0,nvx,nvy,nvz,V,res)
+   subroutine step_pbc(V0,nvx,nvy,nvz,V,res,mres,mask)
       implicit none
 
       integer,intent(in) :: nvx,nvy,nvz
+      logical,intent(in) ::mask(:,:,:)
       real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(in) :: V0
       real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(out) :: V
-      real(np),intent(out) :: res
+      real(np),intent(out) :: res,mres
+      real(np)             :: aux
 
       integer :: i,j,k
 
       res=0._np
+      mres = 0._np
+      open(123,file='res',status='replace')
       !$omp parallel do private(i,j,k) reduction(+:res)
       do k=1,nvz
          do j=1,nvy
             do i=1,nvx
-               V(i,j,k)=(V0(i+1,j,k)+V0(i-1,j,k)+V0(i,j+1,k)+V0(i,j-1,k)+V0(i,j,k+1)+V0(i,j,k-1))/6._np
-               res=res+((V0(i,j,k)-V(i,j,k))**2)
-               if(((V0(i,j,k)-V(i,j,k))**2)>=9.8070400018248165_np) then
+
+               ! Skip calculo residuos y potencial en lugares que son cero
+               if(mask(i,j,k)) then
+                  V(i,j,k)=0._np
                   cycle
-                  write(123,*) i,j,k,(V0(i,j,k)-V(i,j,k))**2
-               endif
-               !if(abs(V(i,j,k)-V0(i,j,k))>1.e-5_dp) print *, "WARNING"
+                endif
+                      
+                V(i,j,k)=(V0(i+1,j,k)+V0(i-1,j,k)+V0(i,j+1,k)+V0(i,j-1,k)+V0(i,j,k+1)+V0(i,j,k-1))/6._np
+                aux=(V0(i,j,k)-V(i,j,k))**2
+                mres=max(mres,aux)
+                res=res+aux
+                !if(abs(V(i,j,k)-V0(i,j,k))>1.e-5_dp) print *, "WARNING"
             enddo
+ 
+             ! Plano yz en el borde x superior
+             V(nvx+1,j,k)=V(1,j,k)
+             ! Plano yz en el borde x inferior
+             V(0,j,k)=V(nvx,j,k)
          enddo
+ 
+          ! Plano xz en el borde y superior
+          V(1:nvx,nvy+1,k)=V(1:nvx,1,k)
+          ! Plano xz en el borde y inverior
+          V(1:nvx,0,k)=V(1:nvx,nvy,k)
+ 
+          ! Las aristas no son necesarias porque la aproximacion del
+          ! laplaciano que tenemos no las usa.
+            
       enddo
       !$omp end parallel do
-   endsubroutine step
+      close(123)
 
-   !---------------------------------------------------------
-
-   subroutine step_pbc(V0,nvx,nvy,nvz,V,res)
-      implicit none
-
-      integer,intent(in) :: nvx,nvy,nvz
-      real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(in) :: V0
-      real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(out) :: V
-      real(np),intent(out) :: res
-
-      integer :: i,j,k
-
-      res=0._np
-      ! open(123,file='res_100.dat',status='replace')
-      !open(124,file='res_sum_100.dat',status='replace')
-      !open(125,file='res_sum_malla_100.dat',status='replace')
-      !$omp parallel do private(i,j,k) reduction(+:res)
-      do k=1,nvz
-         do j=1,nvy
-            do i=1,nvx
-               V(i,j,k)=(V0(i+1,j,k)+V0(i-1,j,k)+V0(i,j+1,k)+V0(i,j-1,k)+V0(i,j,k+1)+V0(i,j,k-1))/6._np
-               !Esto esta mal pero es masomenos lo que tengo que hcaer para que no me haga este calculo
-               !Write(*,*)'Res antes del if', ((V0(i,j,k)-V(i,j,k))**2)
-               if(((V0(i,j,k)-V(i,j,k))**2)>=9.8070400018248165_np) then
-                  !Write(*,*)'Entro al if'
-                  cycle
-               endif
-               res=res+((V0(i,j,k)-V(i,j,k))**2)
-               !if(abs(V(i,j,k)-V0(i,j,k))>1.e-5_dp) print *, "WARNING"
-               !write(123,*) i,j,k,(V0(i,j,k)-V(i,j,k))**2
-               !write(124,*) i,j,k,res
-            enddo
-            V(nvx+1,j,k)=V(1,j,k)
-            V(0,j,k)=V(nvx,j,k)
-         enddo
-         V(1:nvx,nvy+1,k)=V(1:nvx,1,k)
-         V(1:nvx,0,k)=V(1:nvx,nvy,k)
-
-         ! Cruzo aristas
-         V(0,0,k)=V(nvx,nvy,k)
-         V(nvx+1,nvy+1,k)=V(1,1,k)
-
-         ! Cruzo aristas
-         V(0,nvy+1,k)=V(nvx,1,k)
-         V(nvx+1,0,k)=V(1,nvy,k)
-         !write(125,*) i,j,k,res
-
-      enddo
-      !$omp end parallel do
-      !close(123)
-      !close(124)
-      !close(125)
    endsubroutine step_pbc
 
    !---------------------------------------------------------
@@ -387,8 +394,4 @@ contains
    endfunction trilinear_interpolation
 
    !---------------------------------------------------------
-<<<<<<< HEAD
-=======
-
->>>>>>> main
 endprogram V_test_end

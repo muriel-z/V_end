@@ -137,7 +137,7 @@ program V_test_end
          V0(ceros(i,1),ceros(i,2),ceros(i,3))=0._np
       enddo
 
-      call step_pbc(V0,nvx,nvy,nvz,V,res,mres)
+      call step_pbc(V0,nvx,nvy,nvz,V,res,mres,mascara)
 
       ! TODO: Residuo entre V y V0
       if(mod(l,4)==0) then
@@ -231,10 +231,11 @@ contains
 
    endsubroutine dendritas
 
-   subroutine step_pbc(V0,nvx,nvy,nvz,V,res,mres)
+   subroutine step_pbc(V0,nvx,nvy,nvz,V,res,mres,mask)
       implicit none
 
       integer,intent(in) :: nvx,nvy,nvz
+      logical,intent(in) ::mask(:,:,:)
       real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(in) :: V0
       real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(out) :: V
       real(np),intent(out) :: res,mres
@@ -251,7 +252,7 @@ contains
             do i=1,nvx
                 
                ! Skip calculo residuos y potencial en lugares que son cero
-               if(mascara(i,j,k)) then
+               if(mask(i,j,k)) then
                  V(i,j,k)=0._np
                  cycle
                endif
