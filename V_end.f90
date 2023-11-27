@@ -80,7 +80,8 @@ program V_test_end
   
 
    !*********************************************************
-   
+   open(17,File='res_vs_it.dat')
+
    !Iteracion de la solucion
    do l=1,N_iter
       ! Set ceros
@@ -90,6 +91,7 @@ program V_test_end
 
       call step_pbc(V0,nvx,nvy,nvz,V,res,mres,mascara)
       res = res/(nvx*nvy*nvz)
+      write(17,*)l,res
       if (res.le.1E-5) then
          write(*,*)'Convergió con N_iter=',l,'res = ',res
          exit
@@ -103,6 +105,7 @@ program V_test_end
 
    call salida('Vp.dat',r,V,V0)
 
+close(17)
 ! 7 FORMAT (A3)
 ! 10 FORMAT (3(3X,A15))
 ! 11 FORMAT (3(2X,ES17.9))
