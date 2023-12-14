@@ -12,7 +12,7 @@ program V_test_end
    !real(np)                                ::dv
    real(np)                                ::Vtop !Vtop es el valor del voltaje en la tapa
    logical,allocatable                     ::metal(:)
-   logical,allocatable                     ::mascara(:,:,:)
+   real(np),allocatable                     ::mascara(:,:,:)
     integer,allocatable                    :: ceros(:,:)
    !real(np)                                ::d1,d2,d3,dist2,div,res
    real(np)                                ::res,mres,res_ini
@@ -37,7 +37,7 @@ program V_test_end
    nvy=100
    nvz=100
 
-   N_iter=3000
+   N_iter=3000 !TODO borrar N_iter
 
    h(1)=(boxmax(1)-boxmin(1))/(nvx-1)
    h(2)=(boxmax(2)-boxmin(2))/(nvy-1)
@@ -51,14 +51,11 @@ program V_test_end
 
    write(*,*) 'size V',size(V,dim=1)
    write(*,*) 'size V0',size(V0,dim=3)
-
-   ! Matriz booleana
-   allocate(mascara(0:nvx+1,0:nvy+1,0:nvz+1))
    
    call dendritas(nvx,nvy,nvz,r,metal,V0,nceros,ceros,mascara)
    
 
-
+   !Doy el valor de la matriz del voltaje en t=0.Resuelta por Laplace
    !Condicion inicial - construyo el gradiente de voltaje en la dirección z
    Vtop=10._np
    do i=0,nvz+1
@@ -69,10 +66,6 @@ program V_test_end
    ! V(1:nvx,1:nvy,1:nvz)=V0(2:nvx+1,2:nvy+1,2:nvz+1)
 
    call salida('Vini.dat',r,V,V0)
-
-   !Doy el valor de la matriz del voltaje en t=0.Resuelta por Laplace
-
-   !Itero para encontrar la solucion suave
 
    !Residuo inicial
    res_ini=sum((V0(0:,0:,0:)-V(0:,0:,0:))**2)
@@ -117,9 +110,9 @@ contains
       implicit none
 
       logical,allocatable,dimension(:),intent(out)        :: metal
-      integer,allocatable,intent(out)        :: ceros(:,:)
+      integer,allocatable,intent(inout)        :: ceros(:,:)
       integer ,intent(in)                    :: nvx,nvy,nvz
-      logical,allocatable,intent(out)        :: mask(:,:,:)
+      real(np),allocatable,intent(inout)        :: mask(:,:,:)
       real(np),dimension(:),allocatable       ::m   !Voltaje asociado a cada particula,masa
       character,dimension(:),allocatable      ::sym         !indica si la particula es litio libre o congelado
       real(np)                               :: ip(3),ia,ia2,d2
@@ -132,8 +125,8 @@ contains
       real(np),dimension(:,:),allocatable,intent(out)     :: r       ! Posiciones
 
       ! Valores inicales
-      allocate(mask(0:nvx+1,0:nvy+1,0:nvz+1))
-      mask(:,:,:)=.false.
+      allocate(mask(nvx,nvy,nvz))
+      mask(:,:,:)= 1._np
       nceros=0
 
       !Leo el archivo de posición final a partir del cual vamos a calcular el potencial
@@ -174,7 +167,30 @@ contains
 
       write(*,*) 'Ya leyó las posiciones finales'
 
-      
+      call update_ceros(r,metal,mask,nceros,ceros)
+
+   end subroutine dendritas
+
+   subroutine update_ceros(r,metal,mask,nceros,ceros)
+      implicit none
+      real(np),dimension(:,:),intent(in)     :: r       ! Posiciones
+      logical,dimension(:),intent(in)        :: metal
+      integer,allocatable,intent(inout)         :: ceros(:,:)
+      real(np),intent(inout)                      :: mask(:,:,:)
+      real(np),dimension(:),allocatable       ::m   !Voltaje asociado a cada particula,masa
+      character,dimension(:),allocatable      ::sym         !indica si la particula es litio libre o congelado
+      real(np)                               :: ip(3),ia,ia2,d2
+      real(np),parameter                     :: a=3.2_np
+      integer                                 ::ri,rj,rk
+      integer                                :: n,pnum,iia
+      integer                                :: count_CG,count_Li,nceros
+      integer                                :: i,j,k
+
+
+      ! Valores inicales
+      ! nvx=size(mask,1)
+      nceros=0
+
       !Condicion de metal - Se asigna voltaje nulo a la posciones de la malla donde haya estructura de dendritas
       !!$OMP PARALLEL DO PRIVATE(N,RI,RJ,RK)
       pnum = size(r,1)
@@ -205,13 +221,27 @@ contains
 
                   d2=(ip(1)-i)**2+(ip(2)-j)**2+(ip(3)-k)**2
                   if(d2>ia2) cycle
-
+                  !Mask PBC
+                  if(i>nvx) then
+                    cycle
+                  elseif(i<=0) then
+                    cycle
+                  endif
+                  if(j>nvy) then
+                    cycle
+                  elseif(j<=0) then
+                    cycle
+                  endif
+                  if(k<=0) then
+                    cycle
+                  endif
+                  ! FIXME: Revizar que queden bien las filas 0 y nvx+1
                   nceros=nceros+1
                   ceros(nceros,1)=i
                   ceros(nceros,2)=j
                   ceros(nceros,3)=k
 
-                  mask(i,j,k)=.true.
+                  mask(i,j,k)=0._np
 
                   V(i,j,k)=0._np
                 enddo
@@ -223,7 +253,7 @@ contains
       
       print *, "We have this polos", nceros
 
-   endsubroutine dendritas
+   endsubroutine update_ceros
 
    !---------------------------------------------------------
 
@@ -231,7 +261,7 @@ contains
       implicit none
 
       integer,intent(in) :: nvx,nvy,nvz
-      logical,intent(in) ::mask(:,:,:)
+      real(np),intent(in) ::mask(:,:,:)
       real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(in) :: V0
       real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(out) :: V
       real(np),intent(out) :: res,mres
@@ -248,7 +278,7 @@ contains
             do i=1,nvx
 
                ! Skip calculo residuos y potencial en lugares que son cero
-               if(mask(i,j,k)) then
+               if(mask(i,j,k)==0._np) then
                   V(i,j,k)=0._np
                   cycle
                 endif
