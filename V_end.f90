@@ -18,13 +18,14 @@ program V_test_end
    real(np)                                ::res,mres,res_ini
    real(np)                                ::boxmin(3),boxmax(3),h(3)
    real(np),dimension(:,:),allocatable     :: r       ! Posiciones
-   integer                                 ::i,l,nceros
+   integer                                 ::i,j,k,p,l,nceros
    !real(np),dimension(:), allocatable      ::hist
    !real(np)                                ::dx,x
    !integer                                 ::ibin,nbin
    !character(len=6)                        ::aux
    !character(len=15)                       ::filename
    !character(len=2)                        ::Li,CG
+   real(np)                                 ::Ex,Ey,Ez,E
 
    !Este programa tiene que agarrar una configuracion inicial y calcular el potencial
    !Del programa de python
@@ -74,12 +75,14 @@ program V_test_end
 
    !*********************************************************
    open(17,File='res_vs_it.dat')
+   
+   
 
    !Iteracion de la solucion
    do l=1,N_iter
       ! Set ceros
-      do i=1,nceros
-         V0(ceros(i,1),ceros(i,2),ceros(i,3))=0._np
+      do p=1,nceros
+         V0(ceros(p,1),ceros(p,2),ceros(p,3))=0._np
       enddo
 
       call step_pbc(V0,nvx,nvy,nvz,V,res,mres,mascara)
@@ -98,7 +101,31 @@ program V_test_end
 
    call salida('Vp.dat',r,V,V0)
 
+   !Calculo el campo electrico con el valor final del voltaje
+   open(18,File='Eijk.dat')
+   open(19,file='Ejk.dat')
+   write(18,*)'i     j    k      Ex    Ey     Ez      E'
+   
+   do k=1,nvz
+      do j=1,nvy
+         do i=1,nvx
+            Ex = (V(i+1,j,k)-V(i-1,j,k))/(2*h(1))
+            Ey = (V(i,j+1,k)-V(i,j-1,k))/(2*h(2))
+            Ez = (V(i,j,k+1)-V(i,j,k-1))/(2*h(3))
+            E = sqrt(Ex*Ex+Ey*Ey+Ez*Ez)
+            write(18,*)i,j,k,Ex,Ey,Ez,E
+            if (i==nvx/2) then
+               write(19,*)k,j,E
+            endif
+         enddo
+      enddo
+      write(19,*)' '
+   enddo
+   
+
 close(17)
+close(18)
+close(19)
 ! 7 FORMAT (A3)
 ! 10 FORMAT (3(3X,A15))
 ! 11 FORMAT (3(2X,ES17.9))
