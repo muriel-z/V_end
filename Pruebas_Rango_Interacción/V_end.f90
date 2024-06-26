@@ -295,7 +295,7 @@ contains
       real(np)             :: aux
 
       integer :: i,j,k
-
+      open(17,file='k_vs_Vijk.dat',status='replace')
       res=0._np
       mres = 0._np
       open(123,file='res',status='replace')
@@ -315,6 +315,9 @@ contains
                 mres=max(mres,aux)
                 res=res+aux
                 !if(abs(V(i,j,k)-V0(i,j,k))>1.e-5_dp) print *, "WARNING"
+                if (j==nvy/2 .and. i==nvx/2) then
+                  write(17,*) k,V(i,j,k)
+                endif 
             enddo
  
              ! Plano yz en el borde x superior
@@ -333,6 +336,7 @@ contains
             
       enddo
       !$omp end parallel do
+      close(17)
       close(123)
 
    endsubroutine step_pbc
