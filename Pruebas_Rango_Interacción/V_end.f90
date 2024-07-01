@@ -142,7 +142,7 @@ contains
       real(np),allocatable,intent(inout)        :: mask(:,:,:)
       real(np),dimension(:),allocatable       ::m   !Voltaje asociado a cada particula,masa
       character,dimension(:),allocatable      ::sym         !indica si la particula es litio libre o congelado
-      real(np)                               :: ip(3),ia,ia2,d2
+      real(np)                               :: ip(3),ia,ia2,d2,z
       real(np),dimension(0:nvx+1,0:nvy+1,0:nvz+1),intent(inout) :: V
       real(np),parameter                     :: a=3.2_np
       integer                                 ::ri,rj,rk
@@ -156,11 +156,7 @@ contains
       mask(:,:,:)= 1._np
       nceros=0
 
-      !Leo el archivo de posición final a partir del cual vamos a calcular el potencial
-      open(14,File='pos_final.xyz')
-      read(14,*) pnum
-      close(14)
-      write(*,*) 'pnum = ',pnum
+      pnum=180
 
       allocate(r(pnum,3))
       allocate(sym(pnum))
@@ -171,21 +167,13 @@ contains
       !TODO Mejorar esto
       allocate(ceros(8*pnum,3))
 
-      !Lee el archivo de posiciones finales y separa el tipo de particula L (Li+) y C (Li congelado)
-      open(14,File='pos_final.xyz')
-      read(14,*)
-      read(14,*)
-      do i=1,pnum
-         read(14,*) sym(i),r(i,:),m(i)
-         if(sym(i)=='L') then
-               count_Li=count_Li+1
-               metal(i)=.false.
-         elseif(sym(i)=='C') then
-         count_CG=count_CG+1
+      !Creo la pilita de átomos 
+      do i =1,pnum
+         z = real(i,np)
+         sym(i)='C'
          metal(i)=.true.
-         endif
+         r(i,:) = [150._np,150._np,z]
       enddo
-      close(14)
 
 
       write(*,*) 'count_Li = ',count_Li
@@ -230,9 +218,9 @@ contains
             !El radio de corte en 
             !XXX: Esto asume que h(1)=h(2)=h(3)
             ia=a/h(1)
-            if(2*ia<1._np) then
-               print *, "WARNING: mejora la resolución de la malla"
-            endif
+            !if(2*ia<1._np) then
+            !   print *, "WARNING: mejora la resolución de la malla"
+            !endif
 
             iia=int(ia)
             ia2=ia*ia

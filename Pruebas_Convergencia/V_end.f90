@@ -85,7 +85,7 @@ program V_test_end
       call step_pbc(V0,nvx,nvy,nvz,V,res,mres,mascara)
       res = res/(nvx*nvy*nvz)
       write(17,*)l,res
-      if (res.le.1E-9) then
+      if (res.le.1E-8) then
          write(*,*)'Convergió con N_iter=',l,'res = ',res
          exit
       endif
@@ -134,6 +134,7 @@ contains
       read(14,*) pnum
       close(14)
       write(*,*) 'pnum = ',pnum
+      
 
       allocate(r(pnum,3))
       allocate(sym(pnum))
@@ -159,8 +160,7 @@ contains
          endif
       enddo
       close(14)
-
-
+         
       write(*,*) 'count_Li = ',count_Li
 
       write(*,*) 'count_CG = ',count_CG
